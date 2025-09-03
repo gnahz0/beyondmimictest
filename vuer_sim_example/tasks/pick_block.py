@@ -9,16 +9,13 @@ from vuer_sim_example.tasks._tile_floor import TileFloor
 from vuer_sim_example.tasks.entrypoint import make_env
 from vuer_sim_example.vendors.robohive.robohive_object import RobohiveObj
 
-
 # Generate random values for r, g, and b
 r, g, b = random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1)
 x, y = random.uniform(-0.2, 0.2), random.uniform(-0.2, 0.2)
 
-
 def make_schema():
     # return scene._xml | Prettify()
     pass
-
 
 def register():
     add_env(
@@ -30,7 +27,6 @@ def register():
             mode="multiview",
         ),
     )
-
 
 if __name__ == "__main__":
     make_schema() | Save(__file__.replace(".py", ".mjcf.xml"))

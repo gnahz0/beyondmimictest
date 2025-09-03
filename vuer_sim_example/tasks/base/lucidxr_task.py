@@ -82,7 +82,6 @@ def _mj_physics_to_dict(d: "MjData"):
         "site_xmat": d.site_xmat,
     }
 
-
 def get_site(physics: SimplePhysics, prefix: str):
     site = None
     for site_id in range(physics.model.nsite):
@@ -104,7 +103,6 @@ def get_geom_id(physics: SimplePhysics, prefix: str, exact_match=False):
     if this_geom is None:
         raise ValueError(f"geom not found with prefix {prefix}")
     return this_geom
-
 
 def get_body_id(physics: SimplePhysics, prefix: str, exact_match=False):
     body = None
