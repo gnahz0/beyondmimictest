@@ -1,0 +1,4 @@
+# Requirements for simple MJCF viewer
+mujoco>=2.3.0
+vuer>=0.0.30
+numpy>=1.20.0
