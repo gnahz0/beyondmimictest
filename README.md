@@ -1,6 +1,6 @@
-# Car Control with MuJoCo Vuer
+# VuerSim
 
-Simple car control simulation with gamepad support.
+Abstraction layer for MuJoCo physics simulation with Vuer visualization. Provides Environment, Simulation, and Task components for rapid deployment.
 
 ## Setup
 
@@ -9,25 +9,32 @@ pip install -r requirements_simple.txt
 pip install -e .
 ```
 
-## Run
+## Examples
 
-### Gamepad Control
-1. Connect a gamepad/controller to your computer
-2. Run:
+### Car Control
 ```bash
-python examples/car_control.py
-```
-3. Open browser at `http://localhost:8012`
-4. Use gamepad sticks to control the car
-
-### Programmatic Control
-```bash
-python examples/car_control_threaded.py
+python examples/car_control_gamepad.py
+# Open http://localhost:8012, use gamepad to drive
 ```
 
-## Controls
+### Humanoid Policy (G1 Robot)
+```bash
+# Place ONNX model at: examples/policies/g1_29dof.onnx
+python examples/falcon_policy_example.py
+# Open http://localhost:8012
+```
 
-- **Gamepad**: Left stick = steering, Right stick = forward/backward
-- **Threaded**: Automatically drives forward
+## Architecture
 
-Open `http://localhost:8012` to view the simulation.
+- `vuer_sim_example/envs/` - Environment wrappers (gym-like interface)
+- `vuer_sim_example/sim/` - Physics simulation (async→sync bridge)
+- `vuer_sim_example/tasks/` - Task definitions (observations, rewards)
+- `vuer_sim_example/policies/` - Policy implementations (ONNX + PD control)
+
+## Features
+
+- Synchronous control interface
+- ONNX policy deployment with ParamsProto configuration
+- Automatic position-to-torque PD control
+- Web-based visualization
+- Modular design for different robots and tasks

@@ -7,7 +7,6 @@ def control_thread(viewer):
     print("Control thread started", flush=True)
     time.sleep(3)
     while True:
-        # viewer.set_control([1.0, 0.0])
         time.sleep(0.1)
 
 def main():
