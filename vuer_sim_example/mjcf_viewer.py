@@ -11,7 +11,6 @@ from vuer import Vuer
 from vuer.events import MjStep
 from vuer.schemas import MuJoCo, Gamepad
 
-
 class MJCFVuer:
     def __init__(
             self,
@@ -29,7 +28,7 @@ class MJCFVuer:
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = sim_dt
 
-        # Initialize control to zero
+        # initialize control to zero
         self.data.ctrl[:] = 0
 
         self.running = False
@@ -73,13 +72,14 @@ class MJCFVuer:
         scene_url = f"http://localhost:{self.port}/static/{self.mjcf_path.name}"
         asset_urls = [f"http://localhost:{self.port}/static/{f}" for f in all_files]
 
-        session.upsert(Gamepad(key="gamepads"), to="bgChildren", )
+        # session.upsert(Gamepad(key="gamepads"), to="bgChildren", )
+        session.upsert(Gamepad(key="gamepads"), )
         session.upsert @ MuJoCo(
             key="mjcf_model",
             src=scene_url,
             assets=asset_urls,
             frameKeys="qpos qvel ctrl",
-            pause=False,
+            pause=True,
             useLights=True,
             fps=self.fps,
         )
@@ -102,6 +102,7 @@ class MJCFVuer:
                     MjStep(key="mjcf_model", sim_steps=1, ctrl=ctrl),
                     ttl=5,
                 )
+                print('stepping', flush=True)
 
                 if frame and frame.value:
                     key_frame = frame.value["keyFrame"]
@@ -114,7 +115,7 @@ class MJCFVuer:
                 print(f"Step error: {e}")
 
             elapsed = time.perf_counter() - loop_start
-            sleep_time = max(0, 1.0 / self.fps - elapsed)
+            sleep_time = max(0, (1.0 / self.fps) - elapsed)
             await asyncio.sleep(sleep_time)
 
     def step(self, ctrl: Optional[np.ndarray] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
