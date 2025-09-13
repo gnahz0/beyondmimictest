@@ -21,7 +21,6 @@ def control_loop(env, policy):
         qvel = np.array(state["qvel"])
 
         action = policy.predict(qpos, qvel)
-
         o, r, d, info = env.step(action)
 
         if d:

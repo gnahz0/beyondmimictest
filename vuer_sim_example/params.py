@@ -8,7 +8,9 @@ class RobotConfig(PrefixProto):
     desired_base_height = 0.75
     policy_action_scale = 0.25
     gait_period = 0.9
-    
+    simulate_dt = 0.005
+    viewer_dt = 0.02
+
     dof_names = [
         'left_hip_yaw_joint', 'left_hip_roll_joint', 'left_hip_pitch_joint', 
         'left_knee_joint', 'left_ankle_pitch_joint', 'left_ankle_roll_joint',
@@ -109,6 +111,14 @@ class RobotConfig(PrefixProto):
         2.6704, 1.5882, 2.618, 2.0944, 
         1.972222054, 1.61443, 1.61443
     ]
+
+    motor_effort_limits = [88.0, 88.0, 88.0, 139.0, 50.0, 50.0,
+                              88.0, 88.0, 88.0, 139.0, 50.0, 50.0,
+                              88.0, 50.0, 50.0,
+                              25.0, 25.0, 25.0, 25.0,
+                              25.0, 5.0, 5.0,
+                              25.0, 25.0, 25.0, 25.0,
+                              25.0, 5.0, 5.0]
     
     motor_to_joint = list(range(29))
     joint_to_motor = list(range(29))

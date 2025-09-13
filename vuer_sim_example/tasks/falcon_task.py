@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Optional
 from .base_task import Task
+from ..policies.base_policy import quat_rotate_inverse_numpy
 
 class FalconTask(Task):
     def __init__(self):
@@ -9,23 +10,6 @@ class FalconTask(Task):
         self.phase = 0.0
         self.last_actions = np.zeros(29)
         
-    def quat_rotate_inverse(self, quat, vec):
-        q = np.array(quat)
-        q_conj = np.array([-q[0], -q[1], -q[2], q[3]])
-        vec_quat = np.array([vec[0], vec[1], vec[2], 0.0])
-        
-        def quat_mult(q1, q2):
-            w1, x1, y1, z1 = q1[3], q1[0], q1[1], q1[2]
-            w2, x2, y2, z2 = q2[3], q2[0], q2[1], q2[2]
-            return np.array([
-                w1*x2 + x1*w2 + y1*z2 - z1*y2,
-                w1*y2 - x1*z2 + y1*w2 + z1*x2,
-                w1*z2 + x1*y2 - y1*x2 + z1*w2,
-                w1*w2 - x1*x2 - y1*y2 - z1*z2
-            ])
-        
-        result = quat_mult(quat_mult(q_conj, vec_quat), q)
-        return result[:3]
     
     def compute_obs(self, physics) -> np.ndarray:
         state = physics.get_state()
@@ -39,7 +23,7 @@ class FalconTask(Task):
         dof_pos = qpos[7:] - self.default_angles[:len(qpos[7:])]
         dof_vel = qvel[6:] * 0.05
         base_quat = qpos[3:7]
-        projected_gravity = self.quat_rotate_inverse(base_quat, [0, 0, -1])
+        projected_gravity = quat_rotate_inverse_numpy(base_quat.reshape(1, -1), np.array([[0, 0, -1]])).flatten()
         base_ang_vel = qvel[3:6] * 0.25
         
         # update phase

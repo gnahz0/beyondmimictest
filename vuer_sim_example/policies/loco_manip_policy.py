@@ -28,7 +28,7 @@ class LocoManipPolicy(BasePolicy):
         self.base_height_command = np.array([[self.robot_config.desired_base_height]])
         self.command_lin_vel = np.zeros((1, 2))
         self.command_ang_vel = np.zeros((1, 1))
-        self.command_stand = np.ones((1, 1))
+        self.command_stand = np.zeros((1, 1))
         self.command_waist_dofs = np.zeros((1, 3))
     
     def get_current_obs_buffer_dict(self, robot_state_data):

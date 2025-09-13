@@ -1,4 +1,8 @@
 <mujoco model="g1_29dof scene">
+
+  <option timestep="0.001" solver="CG" iterations="30" tolerance="1e-6">
+      <flag nativeccd="disable" />
+  </option>
   <include file="g1_29dof_old_freebase.xml"/>
 
   <statistic center="0 0 0.5" extent="2.0"/>

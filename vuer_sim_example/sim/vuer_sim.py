@@ -9,18 +9,25 @@ import numpy as np
 from vuer import Vuer
 from vuer.events import MjStep
 from vuer.schemas import MuJoCo, Gamepad
+from ..params import Robot, Observation, Policy
 
+DEFAULT_MUJOCO_FREQUENCY = 500
 
 class VuerSim:
     def __init__(
             self,
             mjcf_path: str,
             port: int = 8012,
-            fps: float = 50.0,
+            fps: float = 2000.0,
     ):
         self.mjcf_path = Path(mjcf_path).absolute()
         self.port = port
+
+        self.robot_config = Robot
         self.fps = fps
+        # self.sim_step = DEFAULT_MUJOCO_FREQUENCY * self.robot_config.viewer_dt
+        self.sim_step = 1
+        print(self.sim_step)
 
         self.running = False
         self.is_loaded = False
@@ -75,7 +82,7 @@ class VuerSim:
             key="mjcf_model",
             src=scene_url,
             assets=asset_urls,
-            frameKeys="qpos qvel ctrl",
+            frameKeys="qpos qvel qacc ctrl qfrc_applied qfrc_constraint qfrc_bias",
             pause=True,
             useLights=True,
             fps=self.fps,
@@ -94,7 +101,7 @@ class VuerSim:
                 pass
 
             # for fps
-            await asyncio.sleep(1.0 / self.fps)
+            await asyncio.sleep(0.001)
 
     async def _process_command(self, command: Dict[str, Any], session) -> None:
         action = command.get('action')
@@ -109,7 +116,7 @@ class VuerSim:
 
         try:
             frame = await session.rpc(
-                MjStep(key="mjcf_model", sim_steps=1, ctrl=ctrl),
+                MjStep(key="mjcf_model", sim_steps=self.sim_step, ctrl=ctrl),
                 ttl=5,
             )
             
@@ -188,12 +195,20 @@ class VuerSim:
 
     def get_state(self) -> Dict[str, Any]:
         if self.current_keyframe is None:
-            return {"qpos": [], "qvel": [], "ctrl": [], "time": 0.0}
+            return {
+                "qpos": [], "qvel": [], "qacc": [], "ctrl": [],
+                "qfrc_applied": [], "qfrc_constraint": [], "qfrc_bias": [],
+                "time": 0.0
+            }
 
         return {
             "qpos": self.current_keyframe.get("qpos", []),
             "qvel": self.current_keyframe.get("qvel", []),
+            "qacc": self.current_keyframe.get("qacc", []),
             "ctrl": self.current_keyframe.get("ctrl", []),
+            "qfrc_applied": self.current_keyframe.get("qfrc_applied", []),
+            "qfrc_constraint": self.current_keyframe.get("qfrc_constraint", []),
+            "qfrc_bias": self.current_keyframe.get("qfrc_bias", []),
             "time": self.current_keyframe.get("time", 0.0),
         }
 

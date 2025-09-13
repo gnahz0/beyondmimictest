@@ -3,37 +3,28 @@ import onnxruntime
 from ..params import Robot, Observation, Policy
 
 
-def quat_rotate_inverse_numpy(quat, vec):
-    """Rotate vector by inverse of quaternion.
+def quat_rotate_inverse(q: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """Rotate vector by inverse of quaternion using efficient formula.
     
     Args:
-        quat: quaternion array of shape (1, 4) - [x, y, z, w]
-        vec: vector array of shape (1, 3) - [x, y, z]
+        q: quaternion array of shape (N, 4) - [w, x, y, z]
+        v: vector array of shape (N, 3) - [x, y, z]
     
     Returns:
-        rotated vector of shape (1, 3)
+        rotated vector of shape (N, 3)
     """
-    q = quat[0]
-    v = vec[0]
-    
-    q_conj = np.array([-q[0], -q[1], -q[2], q[3]])
-    
-    vec_quat = np.array([v[0], v[1], v[2], 0.0])
-    
-    def quat_mult(q1, q2):
-        """Multiply two quaternions [x, y, z, w]."""
-        x1, y1, z1, w1 = q1[0], q1[1], q1[2], q1[3]
-        x2, y2, z2, w2 = q2[0], q2[1], q2[2], q2[3]
-        return np.array([
-            w1*x2 + x1*w2 + y1*z2 - z1*y2,  # x
-            w1*y2 - x1*z2 + y1*w2 + z1*x2,  # y  
-            w1*z2 + x1*y2 - y1*x2 + z1*w2,  # z
-            w1*w2 - x1*x2 - y1*y2 - z1*z2   # w
-        ])
-    
-    result = quat_mult(quat_mult(q_conj, vec_quat), q)
-    
-    return result[:3].reshape(1, 3)
+    q_w = q[:, 0]
+    q_vec = q[:, 1:]
+    a = v * (2.0 * q_w**2 - 1.0)[:, np.newaxis]
+    b = np.cross(q_vec, v) * q_w[:, np.newaxis] * 2.0
+    dot_product = np.sum(q_vec * v, axis=1, keepdims=True)
+    c = q_vec * dot_product * 2.0
+    return a - b + c
+
+
+def quat_rotate_inverse_numpy(q, v):
+    """Alias for quat_rotate_inverse for backward compatibility"""
+    return quat_rotate_inverse(q, v)
 
 
 class BasePolicy:
@@ -53,6 +44,7 @@ class BasePolicy:
         self.history_length_dict = self.observation_config.history_length_dict
         
         self.obs_dim_dict = self._calculate_obs_dim_dict()
+        self.motor_effort_limits = np.array(self.robot_config.motor_effort_limits)
         
         self.obs_buf_dict = {
             key: np.zeros((1, self.obs_dim_dict[key] * self.history_length_dict[key])) 
@@ -87,14 +79,18 @@ class BasePolicy:
     
     def get_current_obs_buffer_dict(self, robot_state_data):
         current_obs_buffer_dict = {}
-        
-        base_quat = robot_state_data[:, 3:7]
+
+        # Extract base and joint data
+        current_obs_buffer_dict["base_quat"] = robot_state_data[:, 3:7]  # MuJoCo format: [w,x,y,z]
         current_obs_buffer_dict["base_ang_vel"] = robot_state_data[:, 7 + self.num_dofs + 3 : 7 + self.num_dofs + 6]
         current_obs_buffer_dict["dof_pos"] = robot_state_data[:, 7 : 7 + self.num_dofs] - self.default_dof_angles
         current_obs_buffer_dict["dof_vel"] = robot_state_data[:, 7 + self.num_dofs + 6 : 7 + self.num_dofs + 6 + self.num_dofs]
-        
+
+        # Calculate projected gravity
         v = np.array([[0, 0, -1]])
-        current_obs_buffer_dict["projected_gravity"] = quat_rotate_inverse_numpy(base_quat, v)
+        current_obs_buffer_dict["projected_gravity"] = quat_rotate_inverse_numpy(
+            current_obs_buffer_dict["base_quat"], v
+        )
         
         current_obs_buffer_dict["base_lin_vel"] = np.zeros((1, 3))
         current_obs_buffer_dict["command_lin_vel"] = np.zeros((1, 2))
@@ -108,32 +104,39 @@ class BasePolicy:
 
         return current_obs_buffer_dict
     
-    def parse_current_obs_dict(self, current_obs_buffer_dict):
-        # print(current_obs_buffer_dict)
-        current_obs_dict = {}
-        for key in self.obs_dict:
-            obs_list = sorted(self.obs_dict[key])
-            current_obs_dict[key] = np.concatenate(
-                [current_obs_buffer_dict[obs_name] * self.obs_scales[obs_name] for obs_name in obs_list], axis=1
-            )
-        return current_obs_dict
+    def group_and_scale_observations(self, individual_obs):
+        """Group individual observations and apply scaling for policy input.
+        
+        Args:
+            individual_obs: Dict of individual observation components (e.g., "dof_pos", "dof_vel")
+            
+        Returns:
+            Dict of grouped observations ready for policy (e.g., "actor_obs")
+        """
+        grouped_obs = {}
+        for group_name in self.obs_dict:
+            component_names = sorted(self.obs_dict[group_name])
+            scaled_components = [individual_obs[name] * self.obs_scales[name] for name in component_names]
+            grouped_obs[group_name] = np.concatenate(scaled_components, axis=1)
+        return grouped_obs
     
     def prepare_obs_for_rl(self, robot_state_data):
-        current_obs_buffer_dict = self.get_current_obs_buffer_dict(robot_state_data)
-        current_obs_dict = self.parse_current_obs_dict(current_obs_buffer_dict)
-        
-        # update observation buffers with history
+        individual_obs = self.get_current_obs_buffer_dict(robot_state_data)
+        grouped_obs = self.group_and_scale_observations(individual_obs)
+
+        # print(individual_obs)
+
         self.obs_buf_dict = {
             key: np.concatenate(
                 (
                     self.obs_buf_dict[key][:, self.obs_dim_dict[key] : (self.obs_dim_dict[key] * self.history_length_dict[key])],
-                    current_obs_dict[key],
+                    grouped_obs[key],
                 ),
                 axis=1,
             )
             for key in self.obs_buf_dict
         }
-        
+
         return {"actor_obs": self.obs_buf_dict["actor_obs"].astype(np.float32)}
     
     def predict(self, qpos, qvel):
@@ -157,48 +160,52 @@ class BasePolicy:
         current_joint_pos = qpos[7:]  # skip base pose (7 DOF)
         current_joint_vel = qvel[6:]  # skip base velocity (6 DOF)
 
-        # q_target = np.array([
-        #     -0.1,  # left_hip_pitch_joint
-        #     0.0,  # left_hip_roll_joint
-        #     0.0,  # left_hip_yaw_joint
-        #     0.3,  # left_knee_joint
-        #     -0.2, # left_ankle_pitch_joint
-        #     0.0,  # left_ankle_roll_joint
-        #     -0.1, # right_hip_pitch_joint
-        #     0.0,  # right_hip_roll_joint
-        #     0.0,  # right_hip_yaw_joint
-        #     0.3,  # right_knee_joint
-        #     -0.2, # right_ankle_pitch_joint
-        #     0.0,  # right_ankle_roll_joint
-        #     0.0,  # waist_yaw_joint
-        #     0.0,  # waist_roll_joint
-        #     0.0,  # waist_pitch_joint
-        #     0.0,  # left_shoulder_pitch_joint
-        #     0.0,  # left_shoulder_roll_joint
-        #     0.0,  # left_shoulder_yaw_joint
-        #     0.0,  # left_elbow_joint
-        #     0.0,  # left_wrist_roll_joint
-        #     0.0,  # left_wrist_pitch_joint
-        #     0.0,  # left_wrist_yaw_joint
-        #     0.0,  # right_shoulder_pitch_joint
-        #     0.0,  # right_shoulder_roll_joint
-        #     0.0,  # right_shoulder_yaw_joint
-        #     0.0,  # right_elbow_joint
-        #     0.0,  # right_wrist_roll_joint
-        #     0.0,  # right_wrist_pitch_joint
-        #     0.0   # right_wrist_yaw_joint
-        # ])
+        # q_target = [
+        #     -0.1,  # left_hip_yaw_joint
+        #     0.0,   # left_hip_roll_joint
+        #     0.0,   # left_hip_pitch_joint
+        #     0.3,   # left_knee_joint
+        #     -0.2,  # left_ankle_pitch_joint
+        #     0.0,   # left_ankle_roll_joint
+        #     -0.1,  # right_hip_yaw_joint
+        #     0.0,   # right_hip_roll_joint
+        #     0.0,   # right_hip_pitch_joint
+        #     0.3,   # right_knee_joint
+        #     -0.2,  # right_ankle_pitch_joint
+        #     0.0,   # right_ankle_roll_joint
+        #     0.0,   # waist_yaw_joint
+        #     0.0,   # waist_roll_joint
+        #     0.0,   # waist_pitch_joint
+        #     0.0,   # left_shoulder_pitch_joint
+        #     0.0,   # left_shoulder_roll_joint
+        #     0.0,   # left_shoulder_yaw_joint
+        #     0.0,   # left_elbow_joint
+        #     0.0,   # left_wrist_roll_joint
+        #     0.0,   # left_wrist_pitch_joint
+        #     0.0,   # left_wrist_yaw_joint
+        #     0.0,   # right_shoulder_pitch_joint
+        #     0.0,   # right_shoulder_roll_joint
+        #     0.0,   # right_shoulder_yaw_joint
+        #     0.0,   # right_elbow_joint
+        #     0.0,   # right_wrist_roll_joint
+        #     0.0,   # right_wrist_pitch_joint
+        #     0.0    # right_wrist_yaw_joint
+        # ]
 
         position_error = q_target - current_joint_pos
         velocity_error = 0.0 - current_joint_vel
-        
+
+        # print("q target", q_target[:3])
+        # print("current joint pos", current_joint_pos[:3])
+        # print("error! ", position_error[:3])
+
         kp = np.array(self.robot_config.joint_kp)
         kd = np.array(self.robot_config.joint_kd)
-        
+
         torques = kp * position_error + kd * velocity_error
 
-        torques = np.clip(torques, -60.0, 60.0)
-        
+        torques = np.clip(torques, -self.motor_effort_limits, self.motor_effort_limits)
+
         return torques
     
     def reset(self):
