@@ -19,8 +19,9 @@ def control_loop(env, policy):
         state = env.physics.get_state()
         qpos = np.array(state["qpos"])
         qvel = np.array(state["qvel"])
+        gamepad = state["gamepad"]
 
-        action = policy.predict(qpos, qvel)
+        action = policy.predict(qpos, qvel, gamepad)
         o, r, d, info = env.step(action)
 
         if d:
@@ -33,15 +34,16 @@ def start_server_thread(env):
     env.start()
 
 def main():
+    port_num = 8012
     mjcf_path = Path(__file__).parent / "mjcf_models" / "scene_g1_29dof_freebase.mjcf.xml"
     onnx_path = Path(__file__).parent / "policies" / "g1_29dof.onnx"
     
     policy = LocoManipPolicy(str(onnx_path), policy_action_scale=0.25)
-    env = BaseEnv(physics=VuerSim(mjcf_path=str(mjcf_path), port=8012), task=FalconTask())
+    env = BaseEnv(physics=VuerSim(mjcf_path=str(mjcf_path), port=port_num), task=FalconTask())
     
     threading.Thread(target=start_server_thread, args=(env,), daemon=True).start()
     
-    print("Open: http://localhost:8012")
+    print(f"Open: http://localhost:{port_num}")
     control_loop(env, policy)
 
 if __name__ == "__main__":

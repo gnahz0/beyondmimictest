@@ -28,7 +28,6 @@ class MJCFVuer:
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = sim_dt
 
-        # initialize control to zero
         self.data.ctrl[:] = 0
 
         self.running = False
@@ -72,7 +71,6 @@ class MJCFVuer:
         scene_url = f"http://localhost:{self.port}/static/{self.mjcf_path.name}"
         asset_urls = [f"http://localhost:{self.port}/static/{f}" for f in all_files]
 
-        # session.upsert(Gamepad(key="gamepads"), to="bgChildren", )
         session.upsert(Gamepad(key="gamepads"), )
         session.upsert @ MuJoCo(
             key="mjcf_model",
@@ -102,7 +100,6 @@ class MJCFVuer:
                     MjStep(key="mjcf_model", sim_steps=1, ctrl=ctrl),
                     ttl=5,
                 )
-                print('stepping', flush=True)
 
                 if frame and frame.value:
                     key_frame = frame.value["keyFrame"]

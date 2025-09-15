@@ -1,7 +1,6 @@
 import numpy as np
 from .base_policy import BasePolicy
 
-
 class LocoManipPolicy(BasePolicy):
     def __init__(self, model_path, policy_action_scale=None):
         super().__init__(model_path, policy_action_scale)
@@ -44,8 +43,16 @@ class LocoManipPolicy(BasePolicy):
         
         return current_obs_dict
     
-    def predict(self, qpos, qvel):
+    def predict(self, qpos, qvel, gamepad=None):
         robot_state_data = self._convert_vuer_state_to_robot_data(qpos, qvel)
+
+        if gamepad:
+            print(gamepad)
+            if gamepad['buttons'][5]:
+                self.command_stand = 1 - self.command_stand
+            self.command_lin_vel[0][0] = -gamepad['axes'][1]
+            self.command_lin_vel[0][1] = -gamepad['axes'][0]
+            self.command_ang_vel[0][0] = -gamepad['axes'][2]
         
         obs = self.prepare_obs_for_rl(robot_state_data)
         policy_action = self.policy(obs)
@@ -64,7 +71,8 @@ class LocoManipPolicy(BasePolicy):
             q_target[self.upper_dof_indices] += upper_residual
 
         torques = self.pd_control(q_target, qpos, qvel)
-        # for free base
+
+        # NOTE: for free base
         torques = np.concatenate((np.zeros(6), torques))
         
         return torques
@@ -81,10 +89,8 @@ class LocoManipPolicy(BasePolicy):
     def reset(self):
         super().reset()
         
-        # reset upper body reference positions
         if self.upper_dof_indices:
             self.ref_upper_dof_pos = np.zeros((1, self.num_upper_dofs))
             self.ref_upper_dof_pos += self.default_dof_angles[self.upper_dof_indices]
         
-        # reset base height command
         self.base_height_command = np.array([[self.robot_config.desired_base_height]])

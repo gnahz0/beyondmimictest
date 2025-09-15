@@ -9,7 +9,8 @@ import numpy as np
 from vuer import Vuer
 from vuer.events import MjStep
 from vuer.schemas import MuJoCo, Gamepad
-from ..params import Robot, Observation, Policy
+from ..params import Robot
+from loop_rate_limiters import RateLimiter
 
 DEFAULT_MUJOCO_FREQUENCY = 500
 
@@ -25,18 +26,20 @@ class VuerSim:
 
         self.robot_config = Robot
         self.fps = fps
-        # self.sim_step = DEFAULT_MUJOCO_FREQUENCY * self.robot_config.viewer_dt
-        self.sim_step = 1
-        print(self.sim_step)
+        self.sim_step = DEFAULT_MUJOCO_FREQUENCY * self.robot_config.viewer_dt
+        self.gamepad_state = {}
 
         self.running = False
         self.is_loaded = False
         self.session = None
         self.current_keyframe = None
         self.initial_keyframe = None
-        
+
         self.command_queue = queue.Queue()
         self.result_queue = queue.Queue()
+
+        self.sim_dt = self.robot_config.viewer_dt
+        self.rate = RateLimiter(1 / self.sim_dt)
 
         self._setup_vuer()
 
@@ -46,7 +49,8 @@ class VuerSim:
 
         @self.app.add_handler("GAMEPAD")
         async def on_gamepad(event, session):
-            print("gamepads:", event.value['axes'])
+            self.gamepad_state['axes'] = event.value['axes']
+            self.gamepad_state['buttons'] = event.value['buttons']
 
         @self.app.add_handler("ON_MUJOCO_LOAD")
         async def on_load(event, session):
@@ -105,12 +109,12 @@ class VuerSim:
 
     async def _process_command(self, command: Dict[str, Any], session) -> None:
         action = command.get('action')
-        
+
         if self.current_keyframe and "ctrl" in self.current_keyframe:
             ctrl = self.current_keyframe["ctrl"].copy()
         else:
             ctrl = [0.0] * 100
-        
+
         if action is not None:
             ctrl[:len(action)] = action.tolist()
 
@@ -119,15 +123,17 @@ class VuerSim:
                 MjStep(key="mjcf_model", sim_steps=self.sim_step, ctrl=ctrl),
                 ttl=5,
             )
-            
+
+            self.rate.sleep()
+
             if frame and frame.value:
                 self.current_keyframe = frame.value["keyFrame"]
-                
+
             self.result_queue.put({
                 'success': True,
                 'keyframe': self.current_keyframe
             })
-            
+
         except Exception as e:
             error_msg = f"RPC error: {type(e).__name__}: {str(e)}"
             print(error_msg, flush=True)
@@ -173,7 +179,7 @@ class VuerSim:
             key="mjcf_model",
             src=scene_url,
             assets=asset_urls,
-            frameKeys="qpos qvel ctrl time",
+            frameKeys="qpos qvel qacc ctrl qfrc_applied qfrc_constraint qfrc_bias",
             pause=True,
             useLights=True,
             fps=self.fps,
@@ -210,6 +216,7 @@ class VuerSim:
             "qfrc_constraint": self.current_keyframe.get("qfrc_constraint", []),
             "qfrc_bias": self.current_keyframe.get("qfrc_bias", []),
             "time": self.current_keyframe.get("time", 0.0),
+            "gamepad": self.gamepad_state,
         }
 
     def start(self):

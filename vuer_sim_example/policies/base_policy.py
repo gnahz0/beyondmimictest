@@ -2,17 +2,7 @@ import numpy as np
 import onnxruntime
 from ..params import Robot, Observation, Policy
 
-
 def quat_rotate_inverse(q: np.ndarray, v: np.ndarray) -> np.ndarray:
-    """Rotate vector by inverse of quaternion using efficient formula.
-    
-    Args:
-        q: quaternion array of shape (N, 4) - [w, x, y, z]
-        v: vector array of shape (N, 3) - [x, y, z]
-    
-    Returns:
-        rotated vector of shape (N, 3)
-    """
     q_w = q[:, 0]
     q_vec = q[:, 1:]
     a = v * (2.0 * q_w**2 - 1.0)[:, np.newaxis]
@@ -21,11 +11,8 @@ def quat_rotate_inverse(q: np.ndarray, v: np.ndarray) -> np.ndarray:
     c = q_vec * dot_product * 2.0
     return a - b + c
 
-
 def quat_rotate_inverse_numpy(q, v):
-    """Alias for quat_rotate_inverse for backward compatibility"""
     return quat_rotate_inverse(q, v)
-
 
 class BasePolicy:
     def __init__(self, model_path, policy_action_scale=None):
@@ -80,13 +67,13 @@ class BasePolicy:
     def get_current_obs_buffer_dict(self, robot_state_data):
         current_obs_buffer_dict = {}
 
-        # Extract base and joint data
+        # extract base and joint data
         current_obs_buffer_dict["base_quat"] = robot_state_data[:, 3:7]  # MuJoCo format: [w,x,y,z]
         current_obs_buffer_dict["base_ang_vel"] = robot_state_data[:, 7 + self.num_dofs + 3 : 7 + self.num_dofs + 6]
         current_obs_buffer_dict["dof_pos"] = robot_state_data[:, 7 : 7 + self.num_dofs] - self.default_dof_angles
         current_obs_buffer_dict["dof_vel"] = robot_state_data[:, 7 + self.num_dofs + 6 : 7 + self.num_dofs + 6 + self.num_dofs]
 
-        # Calculate projected gravity
+        # calculate projected gravity
         v = np.array([[0, 0, -1]])
         current_obs_buffer_dict["projected_gravity"] = quat_rotate_inverse_numpy(
             current_obs_buffer_dict["base_quat"], v
@@ -105,14 +92,6 @@ class BasePolicy:
         return current_obs_buffer_dict
     
     def group_and_scale_observations(self, individual_obs):
-        """Group individual observations and apply scaling for policy input.
-        
-        Args:
-            individual_obs: Dict of individual observation components (e.g., "dof_pos", "dof_vel")
-            
-        Returns:
-            Dict of grouped observations ready for policy (e.g., "actor_obs")
-        """
         grouped_obs = {}
         for group_name in self.obs_dict:
             component_names = sorted(self.obs_dict[group_name])
@@ -123,8 +102,6 @@ class BasePolicy:
     def prepare_obs_for_rl(self, robot_state_data):
         individual_obs = self.get_current_obs_buffer_dict(robot_state_data)
         grouped_obs = self.group_and_scale_observations(individual_obs)
-
-        # print(individual_obs)
 
         self.obs_buf_dict = {
             key: np.concatenate(
@@ -160,44 +137,8 @@ class BasePolicy:
         current_joint_pos = qpos[7:]  # skip base pose (7 DOF)
         current_joint_vel = qvel[6:]  # skip base velocity (6 DOF)
 
-        # q_target = [
-        #     -0.1,  # left_hip_yaw_joint
-        #     0.0,   # left_hip_roll_joint
-        #     0.0,   # left_hip_pitch_joint
-        #     0.3,   # left_knee_joint
-        #     -0.2,  # left_ankle_pitch_joint
-        #     0.0,   # left_ankle_roll_joint
-        #     -0.1,  # right_hip_yaw_joint
-        #     0.0,   # right_hip_roll_joint
-        #     0.0,   # right_hip_pitch_joint
-        #     0.3,   # right_knee_joint
-        #     -0.2,  # right_ankle_pitch_joint
-        #     0.0,   # right_ankle_roll_joint
-        #     0.0,   # waist_yaw_joint
-        #     0.0,   # waist_roll_joint
-        #     0.0,   # waist_pitch_joint
-        #     0.0,   # left_shoulder_pitch_joint
-        #     0.0,   # left_shoulder_roll_joint
-        #     0.0,   # left_shoulder_yaw_joint
-        #     0.0,   # left_elbow_joint
-        #     0.0,   # left_wrist_roll_joint
-        #     0.0,   # left_wrist_pitch_joint
-        #     0.0,   # left_wrist_yaw_joint
-        #     0.0,   # right_shoulder_pitch_joint
-        #     0.0,   # right_shoulder_roll_joint
-        #     0.0,   # right_shoulder_yaw_joint
-        #     0.0,   # right_elbow_joint
-        #     0.0,   # right_wrist_roll_joint
-        #     0.0,   # right_wrist_pitch_joint
-        #     0.0    # right_wrist_yaw_joint
-        # ]
-
         position_error = q_target - current_joint_pos
         velocity_error = 0.0 - current_joint_vel
-
-        # print("q target", q_target[:3])
-        # print("current joint pos", current_joint_pos[:3])
-        # print("error! ", position_error[:3])
 
         kp = np.array(self.robot_config.joint_kp)
         kd = np.array(self.robot_config.joint_kd)

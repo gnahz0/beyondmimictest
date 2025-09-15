@@ -9,8 +9,7 @@ class FalconTask(Task):
         self.commands = np.array([1.0, 0.0, 0.0])
         self.phase = 0.0
         self.last_actions = np.zeros(29)
-        
-    
+
     def compute_obs(self, physics) -> np.ndarray:
         state = physics.get_state()
         qpos = np.array(state.get("qpos", []))
@@ -19,18 +18,15 @@ class FalconTask(Task):
         if len(qpos) == 0 or len(qvel) == 0:
             return np.array([])
         
-        # falcon observation processing
         dof_pos = qpos[7:] - self.default_angles[:len(qpos[7:])]
         dof_vel = qvel[6:] * 0.05
         base_quat = qpos[3:7]
         projected_gravity = quat_rotate_inverse_numpy(base_quat.reshape(1, -1), np.array([[0, 0, -1]])).flatten()
         base_ang_vel = qvel[3:6] * 0.25
         
-        # update phase
         self.phase += 0.02
         sin_cos_phase = np.array([np.sin(self.phase), np.cos(self.phase)])
         
-        # build observation
         obs = np.concatenate([
             dof_pos, dof_vel, projected_gravity, base_ang_vel,
             self.commands, self.last_actions[:len(dof_pos)], sin_cos_phase
