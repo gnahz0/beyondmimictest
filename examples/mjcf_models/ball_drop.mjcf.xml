@@ -1,0 +1,28 @@
+<mujoco>
+  <compiler angle="radian" coordinate="local" inertiafromgeom="true"/>
+
+  <default>
+    <joint armature="0" damping="1" limited="false"/>
+    <geom friction="0.15 0.002 0.0001" solimp="0.85 0.98 0.001" solref="0.01 0.05"/>
+  </default>
+
+  <option gravity="0 0 -9.81" integrator="RK4"/>
+
+  <asset>
+    <texture name="texplane" type="2d" builtin="checker"
+             rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512" height="512"/>
+    <material name="MatPlane" texture="texplane" texrepeat="1 1" texuniform="true"/>
+  </asset>
+
+  <worldbody>
+    <light diffuse=".5 .5 .5" dir="0 0 -1" pos="0 0 3"/>
+
+    <geom condim="3" material="MatPlane" name="ground"
+          pos="0 0 0" size="1 1 0.1" type="plane"/>
+
+    <body name="ball" pos="0 0 1">
+      <joint name="ball_joint" type="free" damping="0.001"/>
+      <geom name="ball_geom" type="sphere" size="0.1" density="100" solref="0.01 0.18" solimp="0.86 0.985 0.001" friction="0.1 0.002 0.0001"/>
+    </body>
+  </worldbody>
+</mujoco>
