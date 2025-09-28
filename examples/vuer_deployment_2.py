@@ -91,7 +91,7 @@ def main():
 
     # Set model paths
     onnx_path = Path(__file__).parent / "policies" / "2025-09-28_03-05-40_g1_lafan1_dance1_s1.onnx"
-    motion_npz_path = Path("/home/alecz2/motion_data/motions_lafan1_dance1_s1/motion.npz")
+    motion_npz_path = Path(__file__).parent / "motion_data" / "motions_lafan1_dance1_s1" / "motion.npz"
 
 
     print("=== BeyondMimic Vuer Deployment Test ===")

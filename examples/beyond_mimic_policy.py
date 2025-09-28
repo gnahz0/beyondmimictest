@@ -14,7 +14,13 @@ import os
 import sys
 import yaml
 import re
-sys.path.append('/home/alecz2/vuer-sim-example')
+from pathlib import Path
+
+# Add parent directory to path for imports
+current_dir = Path(__file__).parent
+parent_dir = current_dir.parent
+sys.path.append(str(parent_dir))
+
 from vuer_sim_example.params import Robot, Observation, Policy
 
 def get_mj_actuator_joint_names_recursive(xml_path: str) -> List[str]:
@@ -53,8 +59,13 @@ def get_mj_actuator_joint_names_recursive(xml_path: str) -> List[str]:
     _walk(xml_path)
     return out
 
-def load_env_yaml(yaml_path: str = "/home/alecz2/vuer-sim-example/vuer_sim_example/envs/env.yaml") -> Dict[str, Any]:
+def load_env_yaml(yaml_path: str = None) -> Dict[str, Any]:
     """Load and parse the env.yaml configuration file"""
+    if yaml_path is None:
+        # Default to relative path from this file
+        current_dir = Path(__file__).parent
+        yaml_path = current_dir.parent / "vuer_sim_example" / "envs" / "env.yaml"
+    
     with open(yaml_path, 'r') as f:
         # Use unsafe_load to handle Python-specific tags like !!python/tuple
         config = yaml.unsafe_load(f)
@@ -84,7 +95,7 @@ class BeyondMimicPolicy:
     """
 
     def __init__(self, onnx_path: str, motion_npz_path: str, mj_joint_names: Optional[List[str]] = None, 
-                 env_yaml_path: str = "/home/alecz2/vuer-sim-example/vuer_sim_example/envs/env.yaml"):
+                 env_yaml_path: str = None):
         """Initialize BeyondMimic policy with external motion data
         
         Args:
@@ -362,7 +373,7 @@ class BeyondMimicPolicy:
 
 # Example usage function
 def create_beyond_mimic_policy(onnx_path: str, motion_npz_path: str, xml_path: str = None, 
-                               env_yaml_path: str = "/home/alecz2/vuer-sim-example/vuer_sim_example/envs/env.yaml") -> BeyondMimicPolicy:
+                               env_yaml_path: str = None) -> BeyondMimicPolicy:
     """Factory function to create a BeyondMimic policy with joint name mapping
     
     Args:
