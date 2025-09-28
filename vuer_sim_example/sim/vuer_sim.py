@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 import numpy as np
 from vuer import Vuer
 from vuer.events import MjStep
-from vuer.schemas import MuJoCo, Gamepad
+from vuer.schemas import MuJoCo, Gamepads
 from ..params import Robot
 from loop_rate_limiters import RateLimiter
 
@@ -81,7 +81,7 @@ class VuerSim:
         scene_url = f"http://localhost:{self.port}/static/{self.mjcf_path.name}"
         asset_urls = [f"http://localhost:{self.port}/static/{f}" for f in all_files]
 
-        session.upsert(Gamepad(key="gamepads"))
+        session.upsert(Gamepads(key="gamepads"))
         session.upsert @ MuJoCo(
             key="mjcf_model",
             src=scene_url,

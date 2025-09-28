@@ -53,7 +53,8 @@ def control_loop(env, policy, output_file, save_npz=False, steps=5000):
         
         step_count += 1
         
-        o, r, d, info = env.step()
+        action = policy.predict(qpos, qvel)
+        o, r, d, info = env.step(action)
         
         # Save and exit after specified steps
         if step_count >= steps:
@@ -84,6 +85,43 @@ def start_server_thread(env):
     import asyncio
     asyncio.set_event_loop(asyncio.new_event_loop())
     env.start()
+def _csv(s): 
+    return [x.strip() for x in s.split(",")] if s else []
+
+def print_policy_info(onnx_path: Path):
+    import onnx
+    import onnxruntime as ort
+    m = onnx.load(str(onnx_path))
+    md = {p.key: p.value for p in m.metadata_props}
+
+    sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+    in0  = sess.get_inputs()[0]
+    out0 = sess.get_outputs()[0]
+
+    print("\n=== ONNX POLICY INFO ===")
+    print(f"file: {onnx_path}")
+    print(f"input name: {in0.name}  shape: {in0.shape}")     # e.g. [None, 160] or [None, 575]
+    print(f"output name: {out0.name} shape: {out0.shape}")   # e.g. [None, 29]
+    print("---- metadata ----")
+    print("keys:", sorted(md.keys()))
+    joint_names = _csv(md.get("joint_names",""))
+    obs_names   = _csv(md.get("observation_names",""))
+    print(f"n_joints: {len(joint_names)}")
+    if joint_names:
+        print("first 10 joints:", joint_names[:10])
+    if obs_names:
+        print(f"observation_names ({len(obs_names)} blocks):")
+        for i, name in enumerate(obs_names):
+            print(f"  {i:02d}: {name}")
+
+    # Optional: show presence/length of numeric arrays
+    def _len_list(key):
+        v = md.get(key, "")
+        return len([x for x in v.split(",") if x.strip()]) if v else 0
+    for key in ["action_scale","default_joint_pos","joint_stiffness","joint_damping","motor_effort_limits"]:
+        print(f"{key}: length={_len_list(key)}")
+
+    print("========================\n")
 
 def main():
     parser = argparse.ArgumentParser(description="Vuer MuJoCo simulation with FALCON policy")
@@ -107,8 +145,15 @@ def main():
     
     # Use the G1 ONNX policy (assumes humanoid robot structure)
     onnx_path = Path(__file__).parent / "policies" / "g1_29dof.onnx"
+
+    print_onnx_info(str(onnx_path), topk=10)
+
     
     policy = LocoManipPolicy(str(onnx_path), policy_action_scale=0.25)
+    model = onnx.load(onnx_path)
+
+    print_policy_info(onnx_path)  # <— prints input dim (e.g., 160 or 575) and block names if present
+
     env = BaseEnv(physics=VuerSim(mjcf_path=str(xml_path), port=8012), task=FalconTask())
     
     threading.Thread(target=start_server_thread, args=(env,), daemon=True).start()

@@ -4,7 +4,10 @@ from .base_policy import BasePolicy
 class LocoManipPolicy(BasePolicy):
     def __init__(self, model_path, policy_action_scale=None):
         super().__init__(model_path, policy_action_scale)
-        
+
+        print("Inputs:", getattr(self.policy, "onnx_input_names", None))
+        print("Outputs:", getattr(self.policy, "onnx_output_names", None))
+
         self.obs_dict = self.policy_config.obs_dict_loco_manip
         self.obs_dim_dict = self._calculate_obs_dim_dict()
         
@@ -55,6 +58,20 @@ class LocoManipPolicy(BasePolicy):
             self.command_ang_vel[0][0] = -gamepad['axes'][2]
         
         obs = self.prepare_obs_for_rl(robot_state_data)
+
+        # >>> ADD THIS: adapt to the model's input names
+        onnx_inputs = getattr(self, "onnx_input_names", [])
+        if "obs" in onnx_inputs and "actor_obs" in obs:
+            obs["obs"] = obs["actor_obs"].astype(np.float32)
+
+        if "time_step" in onnx_inputs:
+            if not hasattr(self, "_step"):
+                self._step = 0
+            # use a simple counter; replace with phase if you trained that way
+            obs["time_step"] = np.array([[self._step]], dtype=np.float32)
+            self._step += 1
+        # <<< END ADD
+
         policy_action = self.policy(obs)
         policy_action = np.clip(policy_action, -100, 100)
         

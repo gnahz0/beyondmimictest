@@ -49,7 +49,7 @@ class BasePolicy:
         self.onnx_policy_session = onnxruntime.InferenceSession(model_path)
         input_names = [inp.name for inp in self.onnx_policy_session.get_inputs()]
         output_names = [out.name for out in self.onnx_policy_session.get_outputs()]
-        
+
         self.onnx_input_names = input_names
         self.onnx_output_names = output_names
         
